@@ -1,0 +1,422 @@
+---
+title: "Report"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-02-05"
+bibliography: citations (3).bib
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<style>
+body {
+text-align: justify}
+</style>
+
+
+---
+output: html_document
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+```
+
+
+# Indroduction
+The emergence of Airbnb in 2008 marked a transformative moment in the hospitality industry. Founded on the principles of the sharing economy, Airbnb introduced a novel business model that disrupted traditional notions of temporary accommodation. This innovative platform seamlessly connected individuals with available spaces to travelers through its digital marketplace, fostering a global network of over 6 million listings spanning approximately 220 countries and regions by 2019 [@ioannides_airbnb_2019] .
+
+In contrast to traditional hotels, Airbnb listings offer a more diverse range of experiences and prices. While hotels typically use a star rating system to formulate pricing strategies, Airbnb hosts lack explicit pricing guidelines, making pricing more complex in the context of the sharing economy. Understanding the pricing structure of Airbnb is crucial as it influences consumers' decision-making processes and contributes to the profitability of stakeholders [@gibbs_pricing_2018] .
+
+In this study, we employ Exploratory Data Analysis (EDA) alongside linear regression models, leveraging data extracted from Airbnb listings in New York City and their corresponding attribute information. The objective is to extract valuable insights that can inform hosts and other stakeholders about effective pricing strategies within the Airbnb ecosystem. By scrutinizing the data through EDA and utilizing linear regression models, we aim to offer a comprehensive understanding of the dynamics that influence pricing decisions in the context of the sharing economy. This research not only contributes to the optimization of pricing strategies for hosts but also provides broader insights into the overall dynamics of the accommodations industry within the framework of the sharing economy. <br><br>
+
+
+
+#### Research Question
+Exploratory Data Analysis (EDA) Research Question:
+
+Research Question: What are the key factors influencing the pricing of Airbnb listings in New York, and how do these factors vary across different neighborhoods and room types?<br><br>
+Rationale: This question aims to understand the underlying patterns and relationships within the dataset. Exploring factors influencing pricing, such as neighborhood, room type, and host-related variables, can provide insights into the dynamics of the Airbnb market in New York.<br><br>
+
+Interpretation and Explanation of Model Factors:
+
+Research Question: What are the key predictor variables in the linear regression model that significantly influence rental prices, and how do these variables contribute to the variability in rental prices?<br><br>
+Rationale: This question aims to delve into the interpretation of the regression coefficients, understanding which features play a crucial role in predicting rental prices and their impact on the overall model. <br><br>
+
+#### Data Description
+
+This dataset is an extensive collection of data that is vital for analysing the nuances of hosts, geographic accessibility, and critical metrics that serve as the foundation for forecasts and insights. The initial source is publicly available on Airbnb's website as part of their public dataset initiative. <br><br>
+
+#### Data Dictionary
+
+```{r}
+no<-1:16
+var<-c("ID","name","host_id","host_name","neighbourhood_group","neighbourhood","latitude","longitude","room_type","price","minimum_nights","number_of_reviews","last_review","reviews_per_month","calculated_host_listings_count","availability_365")
+ty<-c("numeric variable","categorical variable","numeric variable","categorical Variable","categorical Variable","categorical Variable","numeric variable","numeric variable","categorical variable","numeric variable","numeric variable","numeric variable","date variable","numeric variable","numeric variable","numeric variable")
+des<-c("Listing ID", "Listing Title","ID of Host","Name of Host","Larger district or group within which a listing is located","More detailed location or area within a neighbourhood group where a listing is situated","Latitude of listing","Longitude of listing","Type of the offered property","Price per night in USD","Minimum number of nights required to book listing","Total number of reviews that listing has","Last rent date of the listing","Total number of reviews divided by the number of months that the listing is active","Amount of listing per host","Number of days per year the listing is active")
+
+
+df<-data.frame(no,var,ty,des)
+library(knitr)
+kable(df,align='lll',col.name=c("NO","Variable","Data Type","Description"),caption="Table 1:Data Information")
+
+```
+
+
+
+
+
+
+```{r}
+# Packages to use
+# Visualization
+library("RColorBrewer")
+library("cowplot")
+library("ggplot2")
+library("hrbrthemes")
+library("ggthemes")
+library("gridExtra")
+library(patchwork)
+
+# Data Manipulation
+library("dplyr")
+library("caTools")
+
+# Machine Learning
+library("e1071")
+library("caret")
+
+# Load Data
+data <- read.csv("C:\\Users\\user\\Desktop\\BUSINESS STATISTICS USING R\\Group\\AB_NYC_2019.csv", header = TRUE)
+```
+
+```{r, echo=FALSE, include=FALSE}
+# Drop attribute 1 & 13 because irrelavent to what we want to analyze
+data1 <- data[, -c(1, 13)]
+# Handling Missing Value
+data2 <- data1[!is.na(data1$name) & data1$name != "", , drop = FALSE]
+data3 <- data2[!is.na(data2$host_name) & data2$host_name != "", , drop = FALSE]
+mean_reviews_per_month <- mean(as.numeric(data3$reviews_per_month[data3$reviews_per_month != ""]), na.rm = TRUE)
+data3$reviews_per_month <- ifelse(data3$reviews_per_month == "" | is.na(data3$reviews_per_month), mean_reviews_per_month, as.numeric(data3$reviews_per_month))
+blank_columns1 <- colnames(data3)[colSums(is.na(data3) | data3 == "") > 0]
+blank_count1 <- colSums(is.na(data3) | data3 == "")
+print(blank_columns1)
+print(blank_count1)
+
+## "neighbourhood" Frequency Data Description
+freq_area <- data.frame(cbind(Frequency = table(data3$neighbourhood), Percent = prop.table(table(data3$neighbourhood)) * 100))
+freq_area <- freq_area[order(freq_area$Frequency),]
+freq_area
+```
+
+
+### Exploratory Data Analysis (EDA)
+Exploratory Data Analysis (EDA) involves a comprehensive examination of the Airbnb dataset, focusing on uncovering patterns, relationships, and insights that can provide a deeper understanding of the factors influencing rental prices in New York City. Through visualization techniques and statistical summaries, EDA aims to reveal key trends within the data, such as the popularity of neighborhoods, the distribution of rental prices, and correlations among different features. <br><br>
+
+#### The 10 most frequent neighbourhood
+```{r} 
+tema <- theme(plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 10, angle=30, face = "bold"),
+              axis.text.y = element_text(size = 10, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.text = element_text(size = 8, face = "bold"))
+
+df <- data.frame(neighbourhood = row.names(tail(freq_area, 10)), Frequency = tail(freq_area, 10)$Frequency)
+
+options(repr.plot.width=20, repr.plot.height=6)
+ggplot(data = df, mapping = aes(x = neighbourhood, y = Frequency)) +
+  theme_minimal() + 
+  geom_point(size = 6, color = "green") +
+  ggtitle("The 10 most frequent neighbourhood") +
+  xlab("") +
+  geom_line(color = "black", size = 2, linetype= 16, group = 1, alpha = .5) + 
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5)+
+  tema
+```
+
+The bar graph provided represents the frequency of Airbnb listings in various neighborhoods in New York City. From the visual data, we can derive several insights:
+
+Popularity of Neighborhoods: Williamsburg appears to be the most popular neighborhood for Airbnb listings, boasting the highest frequency by a significant margin. This suggests that Bedford-Stuyvesant may be a highly sought-after location for visitors to New York, possibly due to its cultural vibrancy, accessibility, or affordability relative to other neighborhoods.
+
+Variation Across Neighborhoods: Following Bedford-Stuyvesant, Bushwick and Harlem also show a high number of listings, indicating their popularity among visitors. The prominence of these neighborhoods could be linked to their unique characteristics - Williamsburg is known for its hipster culture and vibrant nightlife, while Harlem is rich in historical significance and cultural experiences.
+
+Mid-Range Popularity: Neighborhoods like East Village, Hell's Kitchen, and the Upper West Side demonstrate a moderate frequency of listings, suggesting that while they are popular, they might not be the primary choice for the majority of visitors. These areas are known for their unique food scenes, local arts, and proximity to central attractions in Manhattan, which could appeal to a different demographic of travelers seeking a more local or less tourist-centric experience.
+
+Comparatively Lower Frequency: Midtown, Upper East Side, and Crown Heights have the fewest Airbnb listings among the neighborhoods listed. This could be indicative of various factors, such as higher accommodation costs, fewer available properties for short-term rental, or a lesser demand for Airbnb services in these areas. Midtown, being a business hub, might see more hotel stays, while the Upper East Side is known for its wealthier residents and high-end living, possibly making it less accessible for the average Airbnb user. <br><br>
+
+
+
+#### Average price per room type
+```{r}
+fig.align='center'
+# Average Price per room type
+mean_room_type <- aggregate(list(average_price = data3$price), list(room_type = data3$room_type), mean)
+mean_room_type$Percent <- prop.table(mean_room_type$average_price) * 100
+mean_room_type
+
+tema <- theme(
+  plot.title = element_text(size = 18, hjust = .5),
+  axis.text.x = element_text(size = 10, face = "bold"),
+  axis.text.y = element_text(size = 10, face = "bold"),
+  axis.title.x = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  legend.position = "none")
+
+
+
+
+options(repr.plot.width=20, repr.plot.height=6)
+options(warn=-1)
+a <- ggplot(data = mean_room_type, aes(x=room_type, y=average_price)) +
+  coord_flip() +
+  geom_segment(aes(xend=room_type, yend=0, color = room_type), size = 2) +
+  geom_point(size=7, mapping = aes(color = room_type)) +
+  theme_minimal() +
+  xlab("") +
+  ylab("") +
+  ggtitle("Average price per room type") +
+  tema
+
+plot_grid(a,ncol=1, nrow=1)
+```
+
+The horizontal bar plot illustrates the average price of different types of Airbnb accommodations in New York. It appears to differentiate between three categories: shared rooms, private rooms, and entire homes/apartments. Each category has a corresponding price point, depicted by a horizontal line that seems to represent the range of prices within that category.
+
+From the graph, we can observe that entire homes/apartments command the highest average price among the three types of listings. This is expected, as renting an entire home or apartment offers the greatest privacy and space, and thus typically comes at a premium. On the other hand, shared rooms have the lowest average price, which makes sense given the reduced privacy and space when compared to the other options. Private rooms fall in the middle range, offering a compromise between cost and privacy. This pricing structure reflects the varying needs and budgets of travelers, with shared rooms likely catering to the most budget-conscious or those who prioritize social interactions, and entire homes/apartments appealing to those who desire more privacy or are traveling in larger groups. <br><br>
+
+
+#### Top 10 most expensive neighborhoods to book on Airbnb
+```{r}
+# Top 10 most expensive neighborhoods to book on Airbnb
+top_10_neighbourhood <- aggregate(list(data3$price), list(data3$neighbourhood), mean)
+colnames(top_10_neighbourhood) <- c("neighbourhood", "Average_price_per_neighborhood")
+top_10_neighbourhood <- top_10_neighbourhood[order(top_10_neighbourhood$Average_price_per_neighborhood),]
+top_10_neighbourhood <- tail(top_10_neighbourhood, 12)
+top_10_neighbourhood <- head(top_10_neighbourhood, 10)
+r <- c()
+for(i in 10:1){r <- c(r, i)}
+row.names(top_10_neighbourhood) <- r
+top_10_neighbourhood
+
+tema <- theme(
+  plot.title = element_text(size = 20, hjust = 0.5),
+  axis.text.x = element_text(size = 12, face = "bold"),
+  axis.text.y = element_text(size = 12, face = "bold"),
+  axis.title.x = element_text(size = 12),
+  axis.title.y = element_text(size = 12),
+  legend.position = "none",
+  panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black")
+)
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+
+a <- ggplot(data = top_10_neighbourhood, mapping = aes(x = neighbourhood, y = Average_price_per_neighborhood)) +
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood), alpha = 0.9, width = 0.9) +
+  geom_label(mapping = aes(label = round(Average_price_per_neighborhood, 2)), size = 4, fill = "#F5FFFA", fontface = "bold", nudge_y = 0.1) +
+  coord_flip() +
+  ggtitle("The 10 Most Expensive Neighborhoods") +
+  xlab("") +
+  ylab("") +
+  tema
+
+plot_grid(a, ncol=1, nrow=1)
+```
+
+
+The bar graph presents a clear visualization of the average rental prices for Airbnb listings in various neighborhoods of New York City. Tribeca tops the chart as the most expensive neighborhood with an average price close to $500, which isn't surprising given its status as a prime location in Lower Manhattan known for its luxury lofts, upscale restaurants, and cultural significance. The price point reflects the demand for the upscale lifestyle and amenities that Tribeca offers.
+
+Following Tribeca, Sea Gate and SoHo also command high average rental prices, with Sea Gate exceeding $480 and SoHo around $287. Sea Gate's prices can be attributed to its exclusive gated community and beachfront views, making it a desirable location for those looking for a quieter, more exclusive stay in the city. 
+
+Mid-range on the list are neighborhoods like Riverdale and the Flatiron District, with average prices in the mid-$400s and low $300s, respectively. Riverdale offers a suburban feel with its green spaces and family-friendly environment, potentially appealing to those looking for a quieter stay. The Flatiron District is centrally located and known for its iconic architecture, shopping, and dining options, which contributes to its moderately high rental prices.
+
+On the lower end of the top ten expensive neighborhoods are Midtown and the SoHo, with average prices of around $282 and $287, respectively. Despite their lower positioning on the list, these areas are popular for tourists due to their proximity to key attractions, such as Times Square, Broadway, and a multitude of shopping and dining options in Midtown, and the famous Flatiron Building and Madison Square Park in the Flatiron District.Moreover, SoHo known for its fashionable boutiques and artistic history, leverages its trendy appeal to maintain higher rental costs, despite being more affordable than Tribeca and Sea Gate. <br><br>
+
+
+
+####  The 10 cheapest neighborhoods to book on Airbnb
+```{r}
+# The 10 cheapest neighborhoods to book on Airbnb
+top_10_neighbourhood_b <- aggregate(list(data3$price), list(data3$neighbourhood), mean)
+colnames(top_10_neighbourhood_b) <- c("neighbourhood", "Average_price_per_neighborhood")
+top_10_neighbourhood_b <- top_10_neighbourhood_b[order(top_10_neighbourhood_b$Average_price_per_neighborhood),]
+top_10_neighbourhood_b <- head(top_10_neighbourhood_b, 10)
+r <- c()
+for(i in 1:10){r <- c(r, i)}
+row.names(top_10_neighbourhood_b) <- r
+top_10_neighbourhood_b
+
+
+tema <- theme(plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 10, angle=30, face = "bold"),
+              axis.text.y = element_text(size = 10, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.position = "none")
+
+options(repr.plot.width=15, repr.plot.height=6.5)
+a <- ggplot(data = top_10_neighbourhood_b, mapping = aes(x = neighbourhood, y = Average_price_per_neighborhood)) +
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5) +
+  geom_label(mapping = aes(label = round(Average_price_per_neighborhood, 2)), size = 6, fill = "#F5FFFA", fontface = "bold") +
+  ggtitle("The 10 cheapest neighborhoods") +
+  xlab("") +
+  ylab("")+
+  tema
+a
+```
+
+The bar graph provides a clear comparison of the most affordable neighborhoods for Airbnb rentals in New York City. The graph shows each neighborhood with the average rental price, revealing that Tremont, Soundview, and New Dorp Beach are among the neighborhoods with the lowest average costs for accommodations. These lower prices may be due to their location further from the popular tourist areas, or less demand compared to the bustling centers of New York City.
+
+Bull's Head, indicated as the most affordable with the lowest average price at approximately $47.33. Bull's Head, located in Staten Island, may not be a traditional tourist hotspot, which could contribute to its lower prices. This affordability could make it an attractive option for those willing to commute into the more central parts of the city or for visitors looking to explore the more residential parts of New York.
+
+Hunts Point and Tremont follow, with average prices just over $50. These Bronx neighborhoods are known for their industrial areas and residential communities. Their presence on the list suggests that travelers can find reasonable accommodations in areas that offer an authentic New York City living experience, away from the more commercialized tourist centers. This could appeal to travelers who are interested in a more immersive experience of the city's diverse culture.
+
+Soundview, also in the Bronx, and New Dorp, in Staten Island, offer average prices in the mid-$50s, maintaining the trend of affordability in the outer boroughs. Soundview's waterfront parks and New Dorp's suburban feel provide a quieter, more laid-back environment for visitors, which contrasts with the hustle and bustle of Manhattan. This can be particularly appealing for those looking for a retreat after a day spent in the city's more hectic parts.
+
+Finally, neighborhoods like New Dorp Beach, Grant City, Concord, and Mount Eden round out the list, all with average prices below $60. This suggests a consistent affordability across these neighborhoods, which might be attributed to factors such as location, local amenities, and accessibility to public transportation. Visitors to New York City who are budget-conscious can consider these neighborhoods as cost-effective alternatives to staying in the heart of the city, while still enjoying the unique characteristics and experiences that each neighborhood has to offer. <br><br>
+
+
+
+
+
+
+##### Price compare with neighbourbood group
+```{r fig.align='center'}
+# Define the color palette 'pal'
+pal <- brewer.pal(9, "BuPu")  # Replace with your actual color codes
+
+Q <- quantile(data3$price, probs=c(.25, .75), na.rm = T)
+iqr <- IQR(data3$price, na.rm = T)
+lower_bound <- Q[1] - 1.5 * iqr
+upper_bound <- Q[2] + 1.5 * iqr
+df2 <- data3[data3$price > lower_bound & data3$price < upper_bound, ]
+ggplot(df2, aes(price, fill = neighbourhood_group)) + 
+  geom_density(show.legend = F, lwd = 1.5) + 
+  scale_fill_manual(values=pal) + theme_bw(base_size = 20)  +
+  labs(title = "Rental Price Disribution", x = "Price") +
+  facet_grid(~neighbourhood_group) +
+  theme(strip.background = element_rect(fill="grey95"))
+```
+
+
+The "Rental Price Distribution" graph provides a comparative view of Airbnb rental prices across the five boroughs of New York City: Bronx, Brooklyn, Manhattan, Queens, and Staten Island. The graph uses a kernel density estimate to show the distribution of prices, which gives an idea of where the majority of rental prices fall within each borough. From the graph, it is apparent that each borough has a unique distribution, likely reflecting the varying accommodation costs and the economic diversity within each borough.
+
+Manhattan shows a wider distribution with a more prominent peak, suggesting a high concentration of rentals at a specific price point, which is higher compared to the other boroughs. This is consistent with Manhattan's status as the most densely populated and central borough, home to many of New York's key attractions and businesses. The prices in Manhattan also appear to have a wider spread, indicating a large variation in rental prices, which can range from relatively affordable to very expensive. This diversity in pricing allows for a broad spectrum of accommodation options, catering to both budget-conscious travelers and those seeking luxury experiences.
+
+In contrast, the Bronx, Queens, and Staten Island show narrower distributions with peaks at lower price points, indicating a higher density of more affordable rental options. These boroughs are generally considered more residential and less central for tourism compared to Manhattan, which could explain the lower average rental prices. The presence of these lower-priced rentals may reflect the appeal of these boroughs to visitors who are looking for more economical stays or who may be visiting family and friends in these areas. The narrower price distribution suggests that there is less variability in rental prices within these boroughs, potentially offering more predictability for travelers when budgeting for their accommodations. <br><br>
+
+
+#### Price compare with room type
+```{r fig.align='center'}
+# Define the color palette 'pal'
+pal <- brewer.pal(9, "BuPu")  # Replace with your actual color codes
+
+ggplot(df2, aes(price, fill = room_type)) + 
+  geom_density(show.legend = F, lwd = 1.5) + facet_grid(~room_type) +
+  scale_fill_manual(values=pal) + theme_bw(base_size = 22)  +
+  labs(title = "Rental Price Disribution", x = "Price") +
+  theme(strip.background = element_rect(fill="grey95"))
+```
+
+The "Rental Price Distribution" graph displays the distribution of rental prices for three different types of Airbnb accommodations: entire homes/apartments, private rooms, and shared rooms. This kind of distribution graph is useful for understanding the commonality of different price points and the variability of prices for each type of rental.
+
+For entire homes and apartments, the distribution has multiple peaks, indicating several common price points, which suggests a variety of options in terms of size, location, and amenities. The wider spread of the distribution indicates that there's a range of prices from low to high, reflecting the diverse offerings available in the market. The entire home/apartment category likely includes everything from modest apartments to luxurious properties, accounting for the spread in prices.
+
+The private room category shows a sharp peak at a lower price point, suggesting that private rooms are generally more affordable and have less variability in pricing compared to entire homes and apartments. This indicates a high density of listings at this price point, which may be the most common and preferred option for solo travelers or couples looking for a balance between privacy and affordability.
+
+The shared room category shows the narrowest and tallest peak, which indicates a high concentration of listings at even lower prices, and the least variability in price. This is expected, as shared rooms typically offer the least privacy and are priced to reflect that. Shared rooms are likely the choice for budget travelers, especially those who prioritize savings over comfort and privacy.
+
+Overall, the graph provides valuable insights into the New York Airbnb market, illustrating the typical price ranges travelers can expect to encounter for different types of accommodations. It also reflects the market's segmentation, with clear distinctions between the pricing structures of shared spaces versus private accommodations. <br><br>
+
+# Regression Analysis
+The data types of 'neighbourhood_group' and 'room_type' were then changed from factors to numeric. This transformation is often done to convert categorical variables into a format suitable for machine learning algorithms that require numerical input. 
+
+```{r}
+df2 <- data3[data3$price < 198 & data3$price > 20,]
+c1 <- df2
+cols = c("neighbourhood_group", "room_type")
+c1[,cols] <- c1 %>% select_if(is.factor) %>% lapply(as.numeric)
+
+m <- subset(c1, select = -c(price))
+m <- m[, -c(1,2,3,4)]
+mc <- cor(m)
+mc
+```
+
+A correlation matrix ('mc') was computed to analyze the pairwise correlations between different variables in the dataset. The correlation matrix (mc) illustrates the pairwise correlations among variables within the subset of the data. Notably, geographical factors like 'latitude' and 'longitude' display a mild positive correlation, suggesting a tendency for properties at higher 'latitudes' to also have higher 'longitudes'. In terms of temporal and hosting aspects, variables such as 'minimum_nights', 'number_of_reviews', 'reviews_per_month', and 'calculated_host_listings_count' generally exhibit weak correlations. However, a noteworthy exception is the substantial correlation (0.5373) between the 'number_of_reviews' and 'reviews_per_month', indicating a moderate positive relationship. Furthermore, the availability throughout the year ('availability_365') demonstrates a moderate positive correlation (0.2253) with the 'calculated_host_listings_count'. 
+
+The core of the exploration lies in the linear regression model, where predictor variables such as 'room_type', 'minimum_nights', 'availability_365', 'neighbourhood_group', 'latitude', and 'longitude' were selected. The model is crafted using the training set, and its performance is assessed through detailed diagnostics, including residual analysis and goodness-of-fit statistics.
+
+```{r}
+set.seed(123)
+split = sample.split(df2$price, SplitRatio = 0.75)
+training_set = subset(df2, split == TRUE)
+test_set = subset(df2, split == FALSE)
+
+m3 <- lm(price ~
+           room_type +
+           minimum_nights +
+           availability_365 + 
+           neighbourhood_group * latitude + 
+           room_type * longitude,
+         data = training_set)
+summary(m3)
+```
+
+The output from the linear regression model offers valuable insights into the factors influencing rental prices. Examining the coefficients, we observe that the intercept has limited practical interpretation in this context, given the nature of predictors like latitude and longitude. Regarding room types, the positive coefficient for 'Private room' (8.970e+02) suggests an increase in price compared to the reference category ('Entire home/apt'). Conversely, both 'minimum_nights' and 'availability_365' exhibit negative coefficients, indicating that longer minimum nights or higher availability are associated with lower rental prices.
+
+Moving on to neighborhood groups, coefficients for categories like Manhattan and Brooklyn reveal how rental prices differ compared to the reference category. The geographical coordinates, latitude, and longitude, also influence prices, with coefficients modified by interactions with neighborhood groups. Interaction terms, such as 'neighbourhood_group:latitude' and 'room_type:longitude,' capture nuanced effects that arise when considering variables together.
+
+In terms of model diagnostics, the spread of residuals, as indicated by the minimum, quartiles, and maximum values, provides an overview of predictive accuracy. The Residual Standard Error (RSE) of approximately 29.75 signifies the typical deviation of observed prices from predicted values, with a lower RSE indicating a better fit. The R-squared (0.5247) suggests that 52.47% of the variability in rental prices is explained by the model, with the Adjusted R-squared (0.5245) providing a more conservative estimate accounting for the number of predictors. Overall, this regression model demonstrates promise in capturing the intricate relationships between various factors and rental prices in the dataset.
+
+```{r}
+y_pred8 = predict(m3, newdata = test_set)
+
+MSE8 = sum((y_pred8 - test_set$price)^2)/nrow(test_set)
+var.y8 = sum((test_set$price - mean(test_set$price))^2)/(nrow(test_set)-1)
+Rsqr8 = 1 - (MSE8/var.y8)
+cat("\nMSE Model 8 = ", MSE8, " Variance  = ", var.y8, "R Squared = ", Rsqr8)
+```
+The model underwent evaluation on an independent test set, generating key performance metrics for assessment. Notably, the Mean Squared Error (MSE) for Model 8 on the test set was computed as 849.6379. This metric represents the average squared difference between the predicted and observed rental prices, offering a measure of the model's precision. A lower MSE indicates better accuracy in predicting prices.
+
+The variance, calculated at 1863.873, reflects the variability of rental prices in the test set. A higher variance suggests a broader range of prices, and the model's effectiveness in capturing this variability is critical for reliable predictions. In this context, the variance provides insights into the dispersion of rental prices around their mean in the test data.
+
+The R-squared value, an important coefficient of determination, was determined to be 0.5442. This indicates that approximately 54.42% of the variance in rental prices in the test set is explained by the model. In other words, the R-squared value serves as a measure of how well the model's predictions align with the actual observed prices. A higher R-squared suggests a better fit, demonstrating the model's capability to capture and explain a significant portion of the variability in rental prices.
+
+# Discussion
+
+The linear regression model developed serves as a robust tool for predicting rental prices, incorporating various influential factors such as room types, geographical coordinates, and neighborhood groups. Findings reveal substantial managerial implications that can inform strategic decisions in the context of rental property management.
+
+In terms of room type significance, the coefficients associated with 'Private room' and 'Shared room' carry a '***' indicator, emphasizing their high statistical significance. This underscores the critical role that the nature of the rented space plays in influencing rental prices. Property managers can leverage this insight to strategically adjust pricing strategies based on room types, aiming to optimize revenue by finding the right balance between private and shared accommodations.
+
+Moving on to geographical factors, the coefficients linked to latitude and longitude are notably significant. Higher latitude values are associated with increased rental prices, revealing a geographical influence on pricing dynamics. Property managers should take into consideration the geographic location of their listings when determining prices. The interplay of longitude with neighborhood groups also introduces nuanced spatial patterns that can guide pricing strategies, providing valuable insights for strategic decision-making.
+
+Examining the dynamics of neighborhood groups, the coefficients offer valuable insights into the differential impact of location on rental prices. Manhattan, in particular, stands out as a significant influencer of prices, suggesting a premium associated with this borough. Property managers can strategically position their listings and tailor marketing efforts based on the neighborhood group to attract target audiences and optimize profitability.
+
+Considering interactions and nuanced effects, terms such as 'neighbourhood_group:latitude' and 'room_type:longitude' contribute to the model's explanatory power. Property managers can leverage these interactions to refine pricing strategies, considering how spatial relationships influence rental prices. This insight allows for more informed decision-making in terms of property positioning and marketing.
+
+In evaluating the model on the test set, metrics such as Mean Squared Error (MSE), variance, and R-squared provide critical insights into predictive performance. With a relatively low MSE (2238.599), the model demonstrates accuracy in predicting rental prices. The R-squared value of 0.5175 indicates that over 50% of the price variability is explained, offering property managers confidence in the model's ability to make reliable predictions. This positions the model as a valuable tool for strategic decision support in the complex landscape of rental property management.
+
+# Limitations
+
+In considering enhancements for the Airbnb project in New York utilizing linear regression and exploratory data analysis (EDA), there are several avenues for improvement. One notable enhancement would involve the incorporation of additional machine learning algorithms, such as Random Forest and Support Vector Machines (SVM), in conjunction with linear regression. By comparing the predictive performances of different models, a more comprehensive evaluation of the data could be achieved, potentially capturing non-linear relationships that linear regression alone might overlook. This diversified approach could lead to a more robust and accurate prediction model for factors influencing Airbnb prices in New York.
+
+Moreover, expanding the scope of the exploratory data analysis by comparing New York with other states in the U.S. could offer valuable insights. This broader geographical perspective may reveal regional patterns and disparities in Airbnb pricing, helping to identify factors that are either unique to New York or common across different states. To achieve this, one could explore socio-economic indicators, local regulations, or cultural variables influencing the rental market. Additionally, incorporating geographic information system (GIS) techniques could provide spatial insights into how neighborhood characteristics impact Airbnb pricing. This comparative analysis would contribute to a more nuanced understanding of the dynamics shaping Airbnb markets across diverse regions. <br><br>
+
+
+# Conclusion
+In conclusion, the regression analysis provided valuable insights into the relationships between various factors influencing Airbnb rental prices in New York City. The correlation matrix shed light on the interplay between geographical, temporal, and hosting aspects, highlighting notable correlations and guiding our understanding of the dataset. The linear regression model, while explaining around 50% of the variability in rental prices, demonstrated significance and reasonable predictive capability. The examination of rental prices across neighborhoods, room types, and boroughs further enriched our understanding of the diverse factors shaping the Airbnb market in the city.
+
+The exploratory data analysis (EDA) results unveiled interesting patterns in the distribution of listings, showcasing the popularity of neighborhoods like Williamsburg and the varying demand for different room types. Additionally, the examination of average prices across neighborhoods revealed the most expensive and affordable areas, offering valuable insights for both travelers and hosts. As we reflect on these findings, it becomes evident that factors such as location, room type, and borough play crucial roles in determining Airbnb prices.
+
+Looking ahead, future work could involve refining and expanding the predictive models to enhance accuracy and robustness. Incorporating additional features or exploring advanced machine learning techniques may uncover hidden patterns and improve our ability to forecast rental prices. Furthermore, delving into the dynamics of guest preferences, host characteristics, and external events impacting the rental market could provide a more comprehensive understanding. Geographical expansion, as suggested earlier, to include comparisons across different states or global regions, would also contribute to a more nuanced perspective on the broader factors influencing short-term rental markets. In summary, this study lays the groundwork for deeper investigations into the dynamic landscape of Airbnb rentals, with the potential to inform both hosts and travelers, and contribute to the evolving field of short-term accommodation analysis.
+
+
+
+# References
+
+<div id="refs"></div>

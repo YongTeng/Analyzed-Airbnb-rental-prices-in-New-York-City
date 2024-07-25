@@ -1,0 +1,623 @@
+---
+title: "Analysis"
+output: pdf_document
+date: "2024-01-21"
+---
+# Introduction
+
+Since its launch in 2008, Airbnb has transformed travel in the busy city of New York, giving visitors a distinctive and customized way to explore the globe and giving hosts a chance to highlight their homes. The dataset that forms the basis of this project contains important metrics and dynamic listing activity for Airbnb listings in New York City during 2019.
+
+```{r}
+# Packages to use
+# Visualization
+library("RColorBrewer")
+library("cowplot")
+library("ggplot2")
+library("hrbrthemes")
+library("ggthemes")
+library("gridExtra")
+
+# Data Manipulation
+library("dplyr")
+library("caTools")
+
+# Machine Learning
+library("e1071")
+library("caret")
+```
+
+# Data Description
+
+This dataset is an extensive collection of data that is vital for analysing the nuances of hosts, geographic accessibility, and critical metrics that serve as the foundation for forecasts and insights. The initial source is publicly available on Airbnb's website as part of their public dataset initiative.
+
+```{r}
+# Load Data
+data <- read.csv("C:\\Users\\user\\Desktop\\BUSINESS STATISTICS USING R\\Group\\AB_NYC_2019.csv", header = TRUE)
+```
+
+```{r setup, include=FALSE}
+# View Data Type and Data Dimension
+str(data)
+```
+
+# Data Preprocessing and EDA
+
+```{r}
+# Checking Missing Value
+blank_columns <- colnames(data)[colSums(is.na(data) | data == "") > 0]
+blank_count <- colSums(is.na(data) | data == "")
+print(blank_columns)
+print(blank_count)
+# Drop attribute 1 & 13 because irrelavent to what we want to analyze
+data1 <- data[, -c(1, 13)]
+# Handling Missing Value
+data2 <- data1[!is.na(data1$name) & data1$name != "", , drop = FALSE]
+data3 <- data2[!is.na(data2$host_name) & data2$host_name != "", , drop = FALSE]
+mean_reviews_per_month <- mean(as.numeric(data3$reviews_per_month[data3$reviews_per_month != ""]), na.rm = TRUE)
+data3$reviews_per_month <- ifelse(data3$reviews_per_month == "" | is.na(data3$reviews_per_month), mean_reviews_per_month, as.numeric(data3$reviews_per_month))
+blank_columns1 <- colnames(data3)[colSums(is.na(data3) | data3 == "") > 0]
+blank_count1 <- colSums(is.na(data3) | data3 == "")
+print(blank_columns1)
+print(blank_count1)
+```
+```{r}
+# Handling Duplicate Value
+duplicates<-duplicated(data3)
+print(data3[duplicates, ])
+total_duplicates <- sum(duplicated(data3) | duplicated(data3, fromLast = TRUE))
+cat("Total data duplicate:", total_duplicates, "\n")
+```
+
+# Freqency Distribution
+The first step in statistical analysis is to use tools such as frequency distribution tables, histograms, and bar graphs to understand the behavior of the variables. Values are arranged in frequency distribution tables, which summarize events within designated groups. Bar graphs show the distribution of categorical variables, whereas histograms show the distribution of continuous variables. When combined, these tools reveal distribution patterns that provide the groundwork for more in-depth analyses.
+
+```{r}
+# Qualitative Variable
+## "neighbourhood_group" Frequency Data Description
+freq_location <- data.frame(cbind(Frequency = table(data3$neighbourhood_group), Percent = prop.table(table(data3$neighbourhood_group)) * 100))
+freq_location <- freq_location[order(freq_location$Frequency),]
+freq_location
+## "neighbourhood" Frequency Data Description
+freq_area <- data.frame(cbind(Frequency = table(data3$neighbourhood), Percent = prop.table(table(data3$neighbourhood)) * 100))
+freq_area <- freq_area[order(freq_area$Frequency),]
+freq_area
+## "room_type" Frequency Data Description
+freq_type <- data.frame(cbind(Frequency = table(data3$room_type), Percent = prop.table(table(data3$room_type)) * 100))
+freq_type <- freq_type[order(freq_type$Frequency),]
+freq_type
+```
+
+The frequency and representative percentage of the three most common categories of the categorical variables neighborhood_group, neighbourhood, and room_type are as follows, based on the frequency tables generated above:
+
+neighbourhood_group
+
+1. Manhattan -> 21643(44.30%)
+2. Brooklyn -> 20089(41.12%)
+3. Queens -> 5664(11.59%)
+
+neighbourhood
+
+1. Williamsburg -> 3917(8.02%)
+2. Bedford-Stuyvesant -> 3713(7.60%)
+3. Harlem -> 2655(5.43%)
+
+room_type
+
+1. Entire home/apt -> 25393(51.97%)
+2. Private room -> 22306(45.65%)
+3. Shared room -> 1159(2.37%)
+
+```{r}
+# Quantitative Variable Boxplot
+data4 <- data3[, -c(1, 2, 3, 4, 5, 6, 7,8)]
+boxplot(data4, main = "Boxplots for Quantitative Variables", col = "lightblue", las = 2)
+```
+
+By looking at the boxplot, we can see the overall summary of the distribution of the 5 quantitative variables for a better understanding for each variables which we will look at it at a time.
+
+```{r}
+# Quanitative Variable Histogram for price
+tema <- theme(plot.background = element_rect(fill = "#FFFAFA", color = "#FFFAFA"),
+              plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 10, face = "bold"),
+              axis.text.y = element_text(size = 10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.position = "none")
+
+options(repr.plot.width=14, repr.plot.height=6)
+a <- ggplot(data = data3, mapping = aes(x = price)) +
+  geom_histogram(fill = "cyan", bins = 70, linewidth = 1, color = "black") +
+  theme_minimal() +
+  ylab("Frequency") +
+  xlab("Price") +
+  ggtitle("Price Histogram") +
+  tema
+
+
+df <- data.frame(price = data3["price"][data3["price"] <= 1000])
+b <- ggplot(data = df, mapping = aes(x = price)) +
+  geom_histogram(fill = "cyan", bins = 70, linewidth = 1, color = "black") +
+  theme_minimal() +
+  ylab("Frequency") +
+  xlab("Price") +
+  ggtitle("Price <= 1000 | Histogram") +
+  tema
+
+plot_grid(a, b,ncol=2,nrow=1)
+```
+
+Using a histogram, we can observe how the prices are dispersed as we have seen in the price in box plot. Notably, the greatest concentration of values is seen below $200.
+
+```{r}
+# Quanitative Variable Histogram for Minimum Night
+a1 <- ggplot(data = data3, mapping = aes(x = minimum_nights)) +
+  geom_histogram(fill = "yellow", bins = 70, size = 1, color = "black") +
+  theme_minimal() +
+  ylab("Frequency") +
+  xlab("minimum_nights") +
+  ggtitle("minimum_nights Histogram")
+
+# Create the subset df1
+df1 <- data3[data3$minimum_nights <= 40, ]
+
+# Create the second plot
+b1 <- ggplot(data = df1, mapping = aes(x = minimum_nights)) +
+  geom_histogram(fill = "yellow", bins = 70, size = 1, color = "black") +
+  theme_minimal() +
+  ylab("Frequency") +
+  xlab("minimum_nights") +
+  ggtitle("minimum_nights <= 40 | Histogram")
+
+# Plot both plots
+grid.arrange(a1,b1,ncol=2)
+```
+
+Analyzing using a histogram, we can observe that how the minimum nights are distributed, as demonstrated by the boxplot. All reservations made on Airbnb have a minimum number of nights that are concentrated below 10, with a slight peak at 30.
+
+```{r}
+# Qualitative Bar Graph
+tema <- theme(plot.background = element_rect(fill = "#EEE8AA", color = "yellow"),
+              plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 10, face = "bold"),
+              axis.text.y = element_text(size = 10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.position = "none")
+
+tema1 <- theme(plot.background = element_rect(fill = "#EEE8AA", color = "yellow"),
+               plot.title = element_text(size = 18, hjust = .5),
+               axis.text.x = element_text(size = 10, face = "bold"),
+               axis.text.y = element_text(size = 10, face = "bold"),
+               axis.title.x = element_text(size = 10),
+               axis.title.y = element_text(size = 10),
+               legend.position = "none")
+
+options(repr.plot.width=20, repr.plot.height=6)
+a <- ggplot(data = freq_type, mapping = aes(x = Frequency, y = row.names(freq_type))) +
+  geom_bar(stat = "identity", mapping = aes(fill = row.names(freq_type), color = row.names(freq_type)), alpha = .7, size = 1.1) +
+  geom_label(mapping = aes(label=Frequency), fill = "#006400", size = 6, color = "white", fontface = "bold", hjust=.7) +
+  ylab("") +
+  ggtitle("Room type distribution") +
+  theme_economist() +
+  tema
+
+b <- ggplot(data = freq_type, aes(x = row.names(freq_type), y = Frequency)) +
+  geom_bar(stat = "identity", mapping = aes(fill = row.names(freq_type), color = row.names(freq_type)), alpha = .7, size = 1.1) +
+  theme_economist() +
+  xlab("") +
+  ylab("") +
+  ggtitle("Room type - Polar") +
+  tema1
+
+
+plot_grid(a, b + coord_polar(),ncol=2,nrow=1)
+```
+
+We will only view the top 10 categories out of the 221 distinct categories present in the neighborhood variable.
+
+```{r}
+tema <- theme(plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 10, angle=30, face = "bold"),
+              axis.text.y = element_text(size = 10, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.text = element_text(size = 8, face = "bold"))
+
+df <- data.frame(neighbourhood = row.names(tail(freq_area, 10)), Frequency = tail(freq_area, 10)$Frequency)
+
+options(repr.plot.width=20, repr.plot.height=6)
+ggplot(data = df, mapping = aes(x = neighbourhood, y = Frequency)) +
+  theme_minimal() + 
+  geom_point(size = 6, color = "green") +
+  ggtitle("The 10 most frequent neighbourhood") +
+  xlab("") +
+  geom_line(color = "black", size = 2, linetype= 16, group = 1, alpha = .5) + 
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5)+
+  tema
+```
+
+Here are some answers to the various queries that an analysis raises: Which neighborhood—out of all 221—is the most frequently sought by users on the AirBnB website for listings and lodging reservations?:
+
+1. Williamsburg -> 3917(8.02%)
+2. Bedford-Stuyvesant -> 3713(7.60%)
+3. Harlem -> 2655(5.43%)	
+4. Bushwick -> 2462(5.04%)
+5. Upper West Side -> 1969(4.03%)
+6. Hell's Kitchen -> 1954(4.00%)	
+7. East Village -> 1852(3.80%)	
+8. Upper East Side -> 1797(3.68%)
+9. Crown Heights -> 1563(3.20%)
+10. Midtown -> 1545(3.16%)	
+
+```{r}
+tema <- theme(plot.background = element_rect(fill = "#DCFCE6", color = "#66CDAA"),
+              plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 10, face = "bold"),
+              axis.text.y = element_text(size = 10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.position = "none")
+
+tema1 <- theme(plot.background = element_rect(fill = "#DCFCE6", color = "#66CDAA"),
+               plot.title = element_text(size = 18, hjust = .5),
+               axis.text.x = element_text(size = 10, face = "bold"),
+               axis.text.y = element_text(size = 10, face = "bold"),
+               axis.title.x = element_text(size = 10),
+               axis.title.y = element_text(size = 10),
+               legend.position = "none")
+
+options(repr.plot.width=20, repr.plot.height=6)
+a<- ggplot(data = freq_location, aes(x=row.names(freq_location), y=Frequency)) +
+  geom_bar(stat = "identity", mapping = aes(fill = row.names(freq_location), color = row.names(freq_location)), alpha = .7, size = 1.1) +
+  coord_flip() +
+  theme_economist() +
+  xlab("") +
+  ggtitle("Location Distribution") +
+  tema
+
+b <- ggplot(data = freq_location, aes(x=row.names(freq_location), y=Frequency)) +
+  geom_bar(stat = "identity", mapping = aes(fill = row.names(freq_location), color = 
+row.names(freq_location)), alpha = .7, size = 1.1) +
+  theme_economist() +
+  xlab("") +
+  ylab("") +
+  ggtitle("Location Distribution - Polar") +
+  tema1
+
+plot_grid(a, b + coord_polar(),ncol=2,nrow=1)
+```
+
+Similar to what we saw in the frequency table, let's use a bar chart and a polar chart to see how the categories of the neighbor_group variable are distributed.
+		
+1. Manhattan -> 21643(44.30%)
+2. Brooklyn -> 20089(41.12%)
+3. Queens -> 5664(11.59%)
+4. Bronx -> 1089(2.23%)
+5. Staten Island -> 373(0.76%)
+
+```{r}
+# Average Price per room type
+mean_room_type <- aggregate(list(average_price = data3$price), list(room_type = data3$room_type), mean)
+mean_room_type$Percent <- prop.table(mean_room_type$average_price) * 100
+mean_room_type
+```
+
+```{r}
+tema <- theme(
+  plot.title = element_text(size = 18, hjust = .5),
+  axis.text.x = element_text(size = 10, face = "bold"),
+  axis.text.y = element_text(size = 10, face = "bold"),
+  axis.title.x = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  legend.position = "none")
+
+
+tema1 <- theme(
+  plot.title = element_text(size = 18, hjust = .5),
+  axis.text.x = element_text(size = 10, face = "bold"),
+  axis.text.y = element_text(size = 10, face = "bold"),
+  axis.title.x = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  legend.position = "none")
+
+options(repr.plot.width=20, repr.plot.height=6)
+options(warn=-1)
+a <- ggplot(data = mean_room_type, aes(x=room_type, y=average_price)) +
+  coord_flip() +
+  geom_segment(aes(xend=room_type, yend=0, color = room_type), size = 2) +
+  geom_point(size=7, mapping = aes(color = room_type)) +
+  theme_minimal() +
+  xlab("") +
+  ylab("") +
+  ggtitle("Average price per room type") +
+  tema
+
+b <- ggplot(data = mean_room_type, aes(x=room_type, y=average_price)) +
+  geom_segment(aes(xend=room_type, yend=0, color = room_type), size = 2) +
+  geom_point(size=5, mapping = aes(color = room_type)) +
+  theme_minimal() +
+  xlab("") +
+  ylab("") +
+  ggtitle("Average price per room type | Polar") +
+  tema1
+
+plot_grid(a, b + coord_polar(),ncol=2,nrow=1)
+```
+
+We can conclude that the  average price for a Entire home/apt type reservation is approximately $211.81, which accounts for 56.99% of all room types. On average, a Entire home/apt was found to be 32.83% more expensive than a private room and 38.14% more expensive than a shared room. 
+
+Next are private rooms, which have an average booking price of approximately $89.79, accounting for 24.16% of all room types. The average price of a private room was found to be 32.83% cheaper than an Entire home/apt and 5.31% more expensive than a shared room. 
+
+And finally, shared rooms have an average booking price of about $70.08, accounting for 18.85% of all room types.
+The average price of a shared room was found to be 32.83% cheaper than the average price of an Entire home/apt, and 5.31% cheaper than the average price of a private room.
+
+```{r}
+# Top 10 most expensive neighborhoods to book on Airbnb
+top_10_neighbourhood <- aggregate(list(data3$price), list(data3$neighbourhood), mean)
+colnames(top_10_neighbourhood) <- c("neighbourhood", "Average_price_per_neighborhood")
+top_10_neighbourhood <- top_10_neighbourhood[order(top_10_neighbourhood$Average_price_per_neighborhood),]
+top_10_neighbourhood <- tail(top_10_neighbourhood, 12)
+top_10_neighbourhood <- head(top_10_neighbourhood, 10)
+r <- c()
+for(i in 10:1){r <- c(r, i)}
+row.names(top_10_neighbourhood) <- r
+top_10_neighbourhood
+```
+
+Top 10 most expensive neighborhoods
+
+1. Tribeca
+2. Sea Gate
+3. Riverdale	
+4. Prince's Bay
+5. Battery Park City
+6. Flatiron District	
+7. Randall Manor	
+8. NoHo
+9. SoHo
+10. Midtown
+
+```{r}
+tema <- theme(
+  plot.title = element_text(size = 18, hjust = .5),
+  axis.text.x = element_text(size = 10, face = "bold"),
+  axis.text.y = element_text(size = 10, face = "bold"),
+  axis.title.x = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  legend.position = "none")
+
+tema1 <- theme(
+  plot.title = element_text(size = 18, hjust = .5),
+  axis.text.x = element_text(size = 10, face = "bold"),
+  axis.text.y = element_text(size = 10, face = "bold"),
+  axis.title.x = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  legend.position="none")
+
+options(repr.plot.width=20, repr.plot.height=11)
+a <- ggplot(data = top_10_neighbourhood, mapping = aes(x = neighbourhood, y = Average_price_per_neighborhood)) +
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5) +
+  geom_label(mapping = aes(label = round(Average_price_per_neighborhood, 2)), size = 6, fill = "#F5FFFA", fontface = "bold") +
+  coord_flip() +
+  ggtitle("The 10 most expensive neighborhoods") +
+  xlab("") +
+  ylab("") +
+  tema
+
+b <- ggplot(data = top_10_neighbourhood, mapping = aes(x = neighbourhood, y = Average_price_per_neighborhood)) +
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5) +
+  ggtitle("The 10 most expensive neighborhoods") +
+  xlab("") +
+  ylab("") +
+  tema1
+
+plot_grid(a, b + coord_polar(),ncol=2,nrow=1)
+```
+
+The figures above shows the top 10 most expensive neighbours in graphical representation.
+
+```{r}
+# The 10 cheapest neighborhoods to book on Airbnb
+top_10_neighbourhood_b <- aggregate(list(data3$price), list(data3$neighbourhood), mean)
+colnames(top_10_neighbourhood_b) <- c("neighbourhood", "Average_price_per_neighborhood")
+top_10_neighbourhood_b <- top_10_neighbourhood_b[order(top_10_neighbourhood_b$Average_price_per_neighborhood),]
+top_10_neighbourhood_b <- head(top_10_neighbourhood_b, 10)
+r <- c()
+for(i in 1:10){r <- c(r, i)}
+row.names(top_10_neighbourhood_b) <- r
+top_10_neighbourhood_b
+
+
+tema <- theme(plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 10, angle=30, face = "bold"),
+              axis.text.y = element_text(size = 10, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.position = "none")
+
+options(repr.plot.width=15, repr.plot.height=6.5)
+a <- ggplot(data = top_10_neighbourhood_b, mapping = aes(x = neighbourhood, y = Average_price_per_neighborhood)) +
+  geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5) +
+  geom_label(mapping = aes(label = round(Average_price_per_neighborhood, 2)), size = 6, fill = "#F5FFFA", fontface = "bold") +
+  ggtitle("The 10 cheapest neighborhoods") +
+  xlab("") +
+  ylab("")+
+  tema
+a
+
+```
+
+Top 10 most cheapest neighborhoods
+
+1. Bull's Head
+2. Hunts Point
+3. Tremont	
+4. Soundview
+5. New Dorp
+6. Bronxdale	
+7. New Dorp Beach	
+8. Grant City
+9. Concord
+10. Mount Eden
+
+
+# Finding IQR for box plot
+
+```{r}
+Q <- quantile(data3$price, probs=c(.25, .75), na.rm = T)
+iqr <- IQR(data3$price, na.rm = T)
+lower_bound <- Q[1] - 1.5 * iqr
+upper_bound <- Q[2] + 1.5 * iqr
+df2 <- data3[data3$price > lower_bound & data3$price < upper_bound, ]
+```
+
+# Box plot representation for price variable before and after the remove of outliers
+
+```{r}
+par(mfrow=c(2,1))
+options(repr.plot.width=12, repr.plot.height=6)
+par(mar = c(2, 2, 2, 2))
+boxplot(data3$price, col = "grey40", horizontal = T, 
+        main = "Price - Before Removing Outliers")
+boxplot(df2$price, col = "palegreen3", horizontal = T, 
+        main = "Price - After Removing Outliers")
+```
+
+We can see that based on the above box plots, there is a significant improvement in terms of the distribution of the price data. 
+
+# Outlier Detect and Remove for price variable
+
+```{r}
+skewness(data3$price) 
+a <- data3[data3$price < 198 & data3$price > 20,]
+skewness(a$price)
+```
+
+We can see that from above the skewness is > 1 which means that the price variable is highly skewed to the right and we decided to remove the outlier here based on the analysis of price variable from our box plot analysis for quantitative variables and set an interval which starts from 20 to 198 where the box plot shows 0 as price which does not make any sense. After the remove of outliers process, the graph is now much less skewed than before or almost reach normal distrubution from 19.11 to 0.46.
+
+# Q-Q plot 
+To compare before and after the remove of outliers for price variable, we use Q-Q plot here and it appears to have a distribution that is less skewed than the original data.
+
+```{r}
+par(mfrow=c(1,2))
+qqnorm(data3$price);qqline(data3$price)
+qqnorm(a$price); qqline(a$price)
+
+```
+
+# Visual representation of variable price and its relationship with neighbourhood group and room typeWe will be looking at an overall distribution of our price variable after the remove of outliers.
+
+```{r}
+options(repr.plot.width=14, repr.plot.height=7)
+pal <- brewer.pal(9, "BuPu")
+ggplot(df2, aes(price)) + 
+  geom_density(show.legend = F, lwd = 1.5, fill = "palegreen3") + 
+  scale_fill_manual(values=pal) + theme_bw(base_size = 22)  +
+  labs(title = "Rental Price Disribution", x = "Price")
+```
+
+# Price compare with neighbourbood group
+
+```{r}
+ggplot(df2, aes(price, fill = neighbourhood_group)) + 
+  geom_density(show.legend = F, lwd = 1.5) + 
+  scale_fill_manual(values=pal) + theme_bw(base_size = 20)  +
+  labs(title = "Rental Price Disribution", x = "Price") +
+  facet_grid(~neighbourhood_group) +
+  theme(strip.background = element_rect(fill="grey95"))
+```
+
+# Price compare with room type
+
+```{r}
+ggplot(df2, aes(price, fill = room_type)) + 
+  geom_density(show.legend = F, lwd = 1.5) + facet_grid(~room_type) +
+  scale_fill_manual(values=pal) + theme_bw(base_size = 22)  +
+  labs(title = "Rental Price Disribution", x = "Price") +
+  theme(strip.background = element_rect(fill="grey95"))
+```
+
+# Change neighbourhood group and room type data types from factor to numeric
+
+```{r}
+c1 <- a
+cols = c("neighbourhood_group", "room_type")
+c1[,cols] <- c1 %>% select_if(is.factor) %>% lapply(as.numeric)
+```
+
+# Dropping response variable (Y)
+We drop variables name, host_id, host_name and neighbourhood which are redundant for our machine learning process
+
+```{r}
+m <- subset(c1, select = -c(price))
+m <- m[, -c(1,2,3,4)]
+mc <- cor(m)
+mc
+```
+
+The mc correlation matrix shows the pairwise correlations between different variables in the subset of the data. Notably, the geographical factors of latitude and longitude exhibit a weak positive correlation, suggesting a slight tendency for properties with higher latitude to have higher longitude. Regarding the temporal and hosting aspects, variables such as minimum nights, number of reviews, reviews per month, and calculated host listings count generally show weak correlations with one another. However, a notable exception is the strong correlation (0.5508) between the number of reviews and reviews per month, indicating a moderate positive relationship. Additionally, the availability throughout the year (availability_365) exhibits a moderate positive correlation (0.2039) with the calculated host listings count. These correlation insights provide a foundation for understanding the interplay between different features in the dataset.
+
+# Checking Variables that are highly correlated
+
+```{r}
+highlyCorrelated = findCorrelation(mc, cutoff=0.7)
+highlyCorCol = colnames(m)[highlyCorrelated]
+highlyCorCol
+```
+
+Based on the specified correlation cutoff of 0.7, there are no pairs of variables in the dataset that are considered highly correlated. In other words, all variables have low correlations with each other according to the chosen threshold.
+
+# Machine learning
+We first split the data to 75% for training set and 25% for test set.
+
+```{r}
+set.seed(123)
+split = sample.split(a$price, SplitRatio = 0.75)
+training_set = subset(a, split == TRUE)
+test_set = subset(a, split == FALSE)
+```
+
+# Linear regression
+The linear regression model, is designed to predict rental prices (price) by considering various predictor variables. This model was specifically fitted to the training set.
+```{r}
+m3 <- lm(price ~
+           room_type +
+           minimum_nights +
+           availability_365 + 
+           neighbourhood_group * latitude + 
+           room_type * longitude,
+         data = training_set)
+summary(m3)
+```
+
+The residuals, depicting the differences between observed and predicted values, exhibit a spread and distribution characterized by a minimum of -103.276, a first quartile of -20.634, a median of -3.832, a third quartile of 17.765, and a maximum of 187.143. Model statistics provide an overall assessment of the model's performance. The residual standard error is approximately 29.75, suggesting the spread of residuals around the regression line. The multiple R-squared value is 0.5247, indicating that about 52.47% of the variability in rental prices is explained by the model. The adjusted R-squared value is 0.5245, and the F-statistic is 1992 with a p-value < 2.2e-16, underscoring the model's overall significance and explanatory power. In summary, the model shows promise in explaining rental prices as it appears to offer a reasonably good fit to the data.
+
+# Load in test set
+
+```{r}
+y_pred8 = predict(m3, newdata = test_set)
+```
+
+# Run test data to see the accuracy
+
+```{r}
+MSE8 = sum((y_pred8 - test_set$price)^2)/nrow(test_set)
+var.y8 = sum((test_set$price - mean(test_set$price))^2)/(nrow(test_set)-1)
+Rsqr8 = 1 - (MSE8/var.y8)
+cat("\nMSE Model 8 = ", MSE8, " Variance  = ", var.y8, "R Squared = ", Rsqr8)
+
+```
+
+The model appears to offer reasonable predictions on the test set, with the R-squared value and MSE serving as key metrics for evaluating its accuracy and explanatory power. These metrics provide valuable insights into the model's performance, helping you assess its suitability for predicting rental prices in your specific context.
+
+```{r}
+residuals <- residuals(m3)
+# Histogram
+hist(residuals, col = "lightblue", main = "Residuals Histogram")
+
+# QQ Plot
+qqnorm(residuals)
+qqline(residuals)
+```
+This is the residual qq plot where overall the residual data flows approximately according to a constant straight positive gradient line
